@@ -1,0 +1,251 @@
+--[========================================================]
+--[           ระบบออโตฟาร์มไข่ - Roblox ไทย              ]
+--[========================================================]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Player = Players.LocalPlayer
+
+-- สร้างหน้าต่าง GUI พื้นฐานเพื่อให้ใช้งานง่ายและเป็นภาษาไทย
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "EggStealerGUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = Player:WaitForChild("PlayerGui")
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 320, 0, 380)
+MainFrame.Position = UDim2.new(0.5, -160, 0.5, -190)
+MainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true -- ทำให้ลากหน้าต่างไปมาได้
+MainFrame.Parent = ScreenGui
+
+-- มุมโค้งสวยงาม
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 10)
+UICorner.Parent = MainFrame
+
+-- หัวข้อสคริปต์
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Size = UDim2.new(1, 0, 0, 40)
+TitleLabel.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TitleLabel.TextSize = 16
+TitleLabel.Font = Enum.Font.GothamBold
+TitleLabel.Text = "ระบบขโมยไข่อัตโนมัติ"
+TitleLabel.Parent = MainFrame
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 10)
+TitleCorner.Parent = TitleLabel
+
+-- ตัวแปรควบคุมฟังก์ชันต่างๆ
+local EggSettings = {
+    Flying = false,
+    FlightSpeed = 50,
+    SelectedTier = "ศักดิ์สิทธิ์",
+    FastPick = false
+}
+
+-- ฟังก์ชันสร้างปุ่มเปิด/ปิด (Toggle)
+local function CreateToggle(name, yPos, callback)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 280, 0, 35)
+    btn.Position = UDim2.new(0.5, -140, 0, yPos)
+    btn.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextSize = 14
+    btn.Font = Enum.Font.Gotham
+    btn.Text = name .. ": ปิด"
+    btn.Parent = MainFrame
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = btn
+
+    local state = false
+    btn.MouseButton1Click:Connect(function()
+        state = not state
+        if state then
+            btn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+            btn.Text = name .. ": เปิด"
+        else
+            btn.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
+            btn.Text = name .. ": ปิด"
+        end
+        callback(state)
+    end)
+end
+
+-- ฟังก์ชันสร้างช่องปรับค่าความเร็ว (Slider แบบกล่องข้อความพิมพ์ตัวเลข)
+local function CreateSpeedBox(yPos, callback)
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0, 280, 0, 20)
+    label.Position = UDim2.new(0.5, -140, 0, yPos)
+    label.BackgroundTransparency = 1
+    label.TextColor3 = Color3.fromRGB(200, 200, 200)
+    label.TextSize = 12
+    label.Font = Enum.Font.Gotham
+    label.Text = "ความเร็วบิน (1 - 1,000):"
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = MainFrame
+
+    local box = Instance.new("TextBox")
+    box.Size = UDim2.new(0, 280, 0, 30)
+    box.Position = UDim2.new(0.5, -140, 0, yPos + 22)
+    box.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    box.TextColor3 = Color3.fromRGB(255, 255, 255)
+    box.TextSize = 14
+    box.Font = Enum.Font.Gotham
+    box.Text = "50"
+    box.Parent = MainFrame
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = box
+
+    box.FocusLost:Connect(function()
+        local val = tonumber(box.Text)
+        if val then
+            if val < 1 then val = 1 end
+            if val > 1000 then val = 1000 end
+            box.Text = tostring(val)
+            callback(val)
+        else
+            box.Text = tostring(EggSettings.FlightSpeed)
+        end
+    end)
+end
+
+-- ฟังก์ชันสร้างปุ่มเลือกระดับไข่ (วนเปลี่ยนระดับ)
+local function CreateTierSelector(yPos, callback)
+    local tiers = {"ศักดิ์สิทธิ์", "นิรันดร์", "ความลับ"}
+    local currentIndex = 1
+
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 280, 0, 35)
+    btn.Position = UDim2.new(0.5, -140, 0, yPos)
+    btn.BackgroundColor3 = Color3.fromRGB(155, 89, 182)
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextSize = 14
+    btn.Font = Enum.Font.GothamBold
+    btn.Text = "ระดับไข่: " .. tiers[currentIndex]
+    btn.Parent = MainFrame
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = btn
+
+    btn.MouseButton1Click:Connect(function()
+        currentIndex = currentIndex + 1
+        if currentIndex > #tiers then
+            currentIndex = 1
+        end
+        local chosen = tiers[currentIndex]
+        btn.Text = "ระดับไข่: " .. chosen
+        callback(chosen)
+    end)
+end
+
+-- สร้าง UI ตามฟังก์ชันที่ขอ
+CreateToggle("1. บินไปขโมยไข่", 55, function(state)
+    EggSettings.Flying = state
+end)
+
+CreateSpeedBox(100, function(speed)
+    EggSettings.FlightSpeed = speed
+    print("ปรับความเร็วบินเป็น: " .. speed)
+end)
+
+CreateTierSelector(160, function(tier)
+    EggSettings.SelectedTier = tier
+    print("เปลี่ยนเลือกระดับไข่เป็น: " .. tier)
+end)
+
+CreateToggle("3. หยิบไข่เร็ว", 215, function(state)
+    EggSettings.FastPick = state
+    print("สถานะหยิบไข่เร็ว: " + tostring(state))
+end)
+
+-- ปุ่มปิด/เปิดเมนูย่อ
+local ToggleMenuBtn = Instance.new("TextButton")
+ToggleMenuBtn.Size = UDim2.new(0, 280, 0, 35)
+ToggleMenuBtn.Position = UDim2.new(0.5, -140, 0, 270)
+ToggleMenuBtn.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
+ToggleMenuBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleMenuBtn.TextSize = 14
+ToggleMenuBtn.Font = Enum.Font.GothamBold
+ToggleMenuBtn.Text = "ซ่อน / แสดงเมนู (กดปุ่ม Insert)"
+ToggleMenuBtn.Parent = MainFrame
+
+local ToggleCorner = Instance.new("UICorner")
+ToggleCorner.CornerRadius = UDim.new(0, 6)
+ToggleCorner.Parent = ToggleMenuBtn
+
+ToggleMenuBtn.MouseButton1Click:Connect(function()
+    MainFrame.Visible = not MainFrame.Visible
+end)
+
+-- ปุ่มปิดสคริปต์กากบาท
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(0, 30, 0, 30)
+CloseBtn.Position = UDim2.new(1, -35, 0, 5)
+CloseBtn.BackgroundTransparency = 1
+CloseBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+CloseBtn.TextSize = 16
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.Text = "X"
+CloseBtn.Parent = MainFrame
+
+CloseBtn.MouseButton1Click:Connect(function()
+    ScreenGui:Destroy()
+end)
+
+-- ปุ่มลัดคีย์בור드 (Insert) เพื่อซ่อน/แสดงหน้าต่าง
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if input.KeyCode == Enum.KeyCode.Insert then
+        MainFrame.Visible = not MainFrame.Visible
+    end
+end)
+
+--[========================================================]
+--[                  ระบบการทำงานเบื้องหลัง                    ]
+--[========================================================]
+
+RunService.RenderStepped:Connect(function()
+    local character = Player.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+    local rootPart = character.HumanoidRootPart
+
+    -- ฟังก์ชันจำลองการบินไปขโมยไข่ (ตามความเร็วที่ปรับ 1-1,000)
+    if EggSettings.Flying then
+        -- ขยับตัวละครลอยตัวหรือพุ่งไปข้างหน้าตามทิศทางกล้อง
+        local camera = workspace.CurrentCamera
+        rootPart.Velocity = camera.CFrame.LookVector * (EggSettings.FlightSpeed * 0.5)
+    end
+
+    -- ฟังก์ชันหยิบไข่เร็วและการกรองเลือกระดับไข่ (ศักดิ์สิทธิ์, นิรันดร์, ความลับ)
+    if EggSettings.FastPick then
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            -- ค้นหาวัตถุที่เป็นไข่ตามระดับที่เลือก
+            if obj:IsA("Model") or obj:IsA("Part") then
+                if string.find(obj.Name:lower(), "egg") or string.find(obj.Name:lower(), "ไข่") then
+                    -- ตรวจสอบระดับตามที่ผู้ใช้ตั้งค่า (ศักดิ์สิทธิ์, นิรันดร์, ความลับ)
+                    if string.find(obj.Name, EggSettings.SelectedTier) then
+                        -- จำลองการดึงไข่เข้ามาหาตัวหรือกดหยิบอัตราเร่งด่วน
+                        if obj:IsA("Part") then
+                            obj.CFrame = rootPart.CFrame
+                        elseif obj:FindFirstChildWhichIsA("BasePart") then
+                            obj:SetPrimaryPartCFrame(rootPart.CFrame)
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
+
+print("โหลดสคริปต์ 'ระบบขโมยไข่อัตโนมัติ' สำเร็จแล้ว!")
